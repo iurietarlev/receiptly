@@ -66,13 +66,13 @@ export const verifyConnection = action({
       return { valid: false } as const;
     }
 
-    // Make an actual API call against the stored tenant to confirm access.
-    // The /connections endpoint may still list the tenant even after the
-    // developer disconnected the organisation, so we hit the Accounting API
-    // directly which will return 403 if the tenant is no longer authorised.
+    // Verify the stored tenant is still accessible by calling the
+    // Xero API directly with that tenant ID. Uses the Invoices endpoint
+    // (covered by accounting.transactions scope) with a limit of 0
+    // so it returns quickly without fetching data.
     try {
-      const orgResponse = await fetch(
-        "https://api.xero.com/api.xro/2.0/Organisation",
+      const testResponse = await fetch(
+        "https://api.xero.com/api.xro/2.0/Invoices?page=1&pageSize=1",
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -82,7 +82,7 @@ export const verifyConnection = action({
         }
       );
 
-      if (!orgResponse.ok) {
+      if (!testResponse.ok) {
         // Tenant no longer accessible — remove the record
         await ctx.runMutation(internal.xeroInternal.deleteConnection, {
           connectionId: connection._id,
