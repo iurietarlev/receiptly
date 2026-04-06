@@ -68,17 +68,20 @@ export const pushToXero = action({
         const billDate = txnDate > now ? now : txnDate;
         const dateStr = billDate.toISOString().split("T")[0];
         // Build receipt details for the accountant
-        const paymentDetails = [
-          `Merchant: ${txn.merchantName}`,
-          `SumUp Transaction Code: ${txn.transactionCode}`,
-          txn.paymentType ? `Payment type: ${txn.paymentType}` : null,
-          txn.cardLast4 ? `Card: **** ${txn.cardLast4} (${txn.cardType ?? "Unknown"})` : null,
-          txn.entryMode ? `Entry mode: ${txn.entryMode}` : null,
-          txn.verificationMethod ? `Verification: ${txn.verificationMethod}` : null,
-          txn.authCode ? `Auth code: ${txn.authCode}` : null,
-        ]
-          .filter(Boolean)
-          .join("\n");
+        // Use the full raw SumUp detail if available, otherwise fall back to structured fields
+        const paymentDetails = txn.sumupRawDetail
+          ? `Receipt details:\n${JSON.stringify(txn.sumupRawDetail, null, 2)}`
+          : [
+              `Merchant: ${txn.merchantName}`,
+              `SumUp Transaction Code: ${txn.transactionCode}`,
+              txn.paymentType ? `Payment type: ${txn.paymentType}` : null,
+              txn.cardLast4 ? `Card: **** ${txn.cardLast4} (${txn.cardType ?? "Unknown"})` : null,
+              txn.entryMode ? `Entry mode: ${txn.entryMode}` : null,
+              txn.verificationMethod ? `Verification: ${txn.verificationMethod}` : null,
+              txn.authCode ? `Auth code: ${txn.authCode}` : null,
+            ]
+              .filter(Boolean)
+              .join("\n");
 
         // Build line items from SumUp products if available
         const lineItems: {

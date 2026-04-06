@@ -66,6 +66,7 @@ export default defineSchema({
         })
       )
     ),
+    sumupRawDetail: v.optional(v.any()),
   })
     .index("by_transactionCode", ["transactionCode"])
     .index("by_cardLast4_and_timestamp", ["cardLast4", "timestamp"])
