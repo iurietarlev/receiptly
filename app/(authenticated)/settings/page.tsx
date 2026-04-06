@@ -135,7 +135,7 @@ export default function Settings() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => disconnectXero()}
+                    onClick={() => void disconnectXero()}
                   >
                     Disconnect
                   </Button>
