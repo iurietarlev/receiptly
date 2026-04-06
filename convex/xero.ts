@@ -28,6 +28,78 @@ export const getConnection = query({
   },
 });
 
+export const disconnect = action({
+  args: {},
+  handler: async (ctx) => {
+    await ctx.runMutation(internal.xeroInternal.deleteConnectionForUser, {});
+  },
+});
+
+export const verifyConnection = action({
+  args: {},
+  handler: async (ctx) => {
+    const connection = await ctx.runQuery(
+      internal.xeroInternal.getConnectionWithTokens,
+      {}
+    );
+    if (!connection) return null;
+
+    // Try refreshing the token — if the app connection was fully revoked
+    // this will fail and we remove the record.
+    let accessToken: string;
+    try {
+      const refreshed = await refreshXeroToken(connection.refreshToken);
+      accessToken = refreshed.access_token;
+
+      // Persist the new tokens
+      await ctx.runMutation(internal.xeroInternal.updateTokens, {
+        connectionId: connection._id,
+        accessToken: refreshed.access_token,
+        refreshToken: refreshed.refresh_token,
+        tokenExpiresAt: Date.now() + refreshed.expires_in * 1000,
+      });
+    } catch {
+      // Token refresh failed — connection revoked
+      await ctx.runMutation(internal.xeroInternal.deleteConnection, {
+        connectionId: connection._id,
+      });
+      return { valid: false } as const;
+    }
+
+    // Verify the stored tenant is still accessible by calling the
+    // Xero API directly with that tenant ID. Uses the Invoices endpoint
+    // (covered by accounting.transactions scope) with a limit of 0
+    // so it returns quickly without fetching data.
+    try {
+      const testResponse = await fetch(
+        "https://api.xero.com/api.xro/2.0/Invoices?page=1&pageSize=1",
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: "application/json",
+            "Xero-Tenant-Id": connection.xeroTenantId,
+          },
+        }
+      );
+
+      if (!testResponse.ok) {
+        // Tenant no longer accessible — remove the record
+        await ctx.runMutation(internal.xeroInternal.deleteConnection, {
+          connectionId: connection._id,
+        });
+        return { valid: false } as const;
+      }
+
+      return { valid: true } as const;
+    } catch {
+      await ctx.runMutation(internal.xeroInternal.deleteConnection, {
+        connectionId: connection._id,
+      });
+      return { valid: false } as const;
+    }
+  },
+});
+
 export const pushToXero = action({
   args: {
     transactionIds: v.array(v.id("transactions")),

@@ -1,6 +1,7 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { useEffect, useRef } from "react";
+import { useQuery, useAction } from "convex/react";
 import { useUser } from "@clerk/nextjs";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/convex/_generated/api";
@@ -19,9 +20,22 @@ export default function Settings() {
   const { user: clerkUser } = useUser();
   const user = useQuery(api.users.currentUser);
   const xeroConnection = useQuery(api.xero.getConnection);
+  const verifyConnection = useAction(api.xero.verifyConnection);
+  const disconnectXero = useAction(api.xero.disconnect);
+  const verifiedRef = useRef(false);
   const searchParams = useSearchParams();
   const xeroStatus = searchParams.get("xero");
   const xeroDetail = searchParams.get("detail");
+
+  useEffect(() => {
+    if (xeroConnection && !verifiedRef.current) {
+      verifiedRef.current = true;
+      verifyConnection().catch(() => {
+        // Verification failed — connection will be deleted and
+        // xeroConnection will reactively update to null
+      });
+    }
+  }, [xeroConnection, verifyConnection]);
 
   if (user === undefined) {
     return (
@@ -43,7 +57,7 @@ export default function Settings() {
     url.searchParams.set("state", user._id);
     url.searchParams.set(
       "scope",
-      "openid profile email accounting.transactions accounting.contacts accounting.payments accounting.settings.read offline_access"
+      "openid profile email accounting.invoices accounting.payments accounting.contacts accounting.settings.read offline_access"
     );
     window.location.href = url.toString();
   }
@@ -114,9 +128,18 @@ export default function Settings() {
                     Your Xero connection has expired. Please reconnect to continue pushing transactions.
                   </p>
                 )}
-                <Button variant="outline" size="sm" onClick={handleConnectXero} className="mt-2">
-                  Reconnect Xero
-                </Button>
+                <div className="flex gap-2 mt-2">
+                  <Button variant="outline" size="sm" onClick={handleConnectXero}>
+                    Reconnect Xero
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void disconnectXero()}
+                  >
+                    Disconnect
+                  </Button>
+                </div>
               </div>
             ) : (
               <Button onClick={handleConnectXero}>Connect Xero</Button>
