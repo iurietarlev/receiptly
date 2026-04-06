@@ -37,51 +37,54 @@ export const verifyConnection = action({
     );
     if (!connection) return null;
 
+    // Try refreshing the token — if the app connection was fully revoked
+    // this will fail and we remove the record.
+    let accessToken: string;
     try {
-      // Refresh the token first
       const refreshed = await refreshXeroToken(connection.refreshToken);
+      accessToken = refreshed.access_token;
 
-      // Check if the stored tenant is still in the active connections list
-      const connectionsResponse = await fetch(
-        "https://api.xero.com/connections",
-        {
-          headers: { Authorization: `Bearer ${refreshed.access_token}` },
-        }
-      );
-
-      if (!connectionsResponse.ok) {
-        // Can't verify — remove the connection to be safe
-        await ctx.runMutation(internal.xeroInternal.deleteConnection, {
-          connectionId: connection._id,
-        });
-        return { valid: false } as const;
-      }
-
-      const tenants = (await connectionsResponse.json()) as {
-        tenantId: string;
-      }[];
-      const tenantStillConnected = tenants.some(
-        (t) => t.tenantId === connection.xeroTenantId
-      );
-
-      if (!tenantStillConnected) {
-        // Tenant has been disconnected from Xero's side — remove record
-        await ctx.runMutation(internal.xeroInternal.deleteConnection, {
-          connectionId: connection._id,
-        });
-        return { valid: false } as const;
-      }
-
-      // Connection is valid — update tokens
+      // Persist the new tokens
       await ctx.runMutation(internal.xeroInternal.updateTokens, {
         connectionId: connection._id,
         accessToken: refreshed.access_token,
         refreshToken: refreshed.refresh_token,
         tokenExpiresAt: Date.now() + refreshed.expires_in * 1000,
       });
+    } catch {
+      // Token refresh failed — connection revoked
+      await ctx.runMutation(internal.xeroInternal.deleteConnection, {
+        connectionId: connection._id,
+      });
+      return { valid: false } as const;
+    }
+
+    // Make an actual API call against the stored tenant to confirm access.
+    // The /connections endpoint may still list the tenant even after the
+    // developer disconnected the organisation, so we hit the Accounting API
+    // directly which will return 403 if the tenant is no longer authorised.
+    try {
+      const orgResponse = await fetch(
+        "https://api.xero.com/api.xro/2.0/Organisation",
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: "application/json",
+            "Xero-Tenant-Id": connection.xeroTenantId,
+          },
+        }
+      );
+
+      if (!orgResponse.ok) {
+        // Tenant no longer accessible — remove the record
+        await ctx.runMutation(internal.xeroInternal.deleteConnection, {
+          connectionId: connection._id,
+        });
+        return { valid: false } as const;
+      }
+
       return { valid: true } as const;
     } catch {
-      // Token refresh failed — connection is no longer valid
       await ctx.runMutation(internal.xeroInternal.deleteConnection, {
         connectionId: connection._id,
       });
