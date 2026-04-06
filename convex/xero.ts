@@ -28,6 +28,68 @@ export const getConnection = query({
   },
 });
 
+export const verifyConnection = action({
+  args: {},
+  handler: async (ctx) => {
+    const connection = await ctx.runQuery(
+      internal.xeroInternal.getConnectionWithTokens,
+      {}
+    );
+    if (!connection) return null;
+
+    try {
+      // Refresh the token first
+      const refreshed = await refreshXeroToken(connection.refreshToken);
+
+      // Check if the stored tenant is still in the active connections list
+      const connectionsResponse = await fetch(
+        "https://api.xero.com/connections",
+        {
+          headers: { Authorization: `Bearer ${refreshed.access_token}` },
+        }
+      );
+
+      if (!connectionsResponse.ok) {
+        // Can't verify — remove the connection to be safe
+        await ctx.runMutation(internal.xeroInternal.deleteConnection, {
+          connectionId: connection._id,
+        });
+        return { valid: false } as const;
+      }
+
+      const tenants = (await connectionsResponse.json()) as {
+        tenantId: string;
+      }[];
+      const tenantStillConnected = tenants.some(
+        (t) => t.tenantId === connection.xeroTenantId
+      );
+
+      if (!tenantStillConnected) {
+        // Tenant has been disconnected from Xero's side — remove record
+        await ctx.runMutation(internal.xeroInternal.deleteConnection, {
+          connectionId: connection._id,
+        });
+        return { valid: false } as const;
+      }
+
+      // Connection is valid — update tokens
+      await ctx.runMutation(internal.xeroInternal.updateTokens, {
+        connectionId: connection._id,
+        accessToken: refreshed.access_token,
+        refreshToken: refreshed.refresh_token,
+        tokenExpiresAt: Date.now() + refreshed.expires_in * 1000,
+      });
+      return { valid: true } as const;
+    } catch {
+      // Token refresh failed — connection is no longer valid
+      await ctx.runMutation(internal.xeroInternal.deleteConnection, {
+        connectionId: connection._id,
+      });
+      return { valid: false } as const;
+    }
+  },
+});
+
 export const pushToXero = action({
   args: {
     transactionIds: v.array(v.id("transactions")),

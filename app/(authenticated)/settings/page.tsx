@@ -1,6 +1,7 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { useEffect, useRef } from "react";
+import { useQuery, useAction } from "convex/react";
 import { useUser } from "@clerk/nextjs";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/convex/_generated/api";
@@ -19,9 +20,21 @@ export default function Settings() {
   const { user: clerkUser } = useUser();
   const user = useQuery(api.users.currentUser);
   const xeroConnection = useQuery(api.xero.getConnection);
+  const verifyConnection = useAction(api.xero.verifyConnection);
+  const verifiedRef = useRef(false);
   const searchParams = useSearchParams();
   const xeroStatus = searchParams.get("xero");
   const xeroDetail = searchParams.get("detail");
+
+  useEffect(() => {
+    if (xeroConnection && !verifiedRef.current) {
+      verifiedRef.current = true;
+      verifyConnection().catch(() => {
+        // Verification failed — connection will be deleted and
+        // xeroConnection will reactively update to null
+      });
+    }
+  }, [xeroConnection, verifyConnection]);
 
   if (user === undefined) {
     return (
@@ -43,7 +56,7 @@ export default function Settings() {
     url.searchParams.set("state", user._id);
     url.searchParams.set(
       "scope",
-      "openid profile email accounting.transactions accounting.contacts accounting.payments accounting.settings.read offline_access"
+      "openid profile email accounting.transactions accounting.contacts accounting.settings.read offline_access"
     );
     window.location.href = url.toString();
   }

@@ -79,6 +79,15 @@ export const getTransactionsByIds = internalQuery({
   },
 });
 
+export const deleteConnection = internalMutation({
+  args: {
+    connectionId: v.id("xero_connections"),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.delete(args.connectionId);
+  },
+});
+
 export const markTransactionPushed = internalMutation({
   args: {
     transactionId: v.id("transactions"),
