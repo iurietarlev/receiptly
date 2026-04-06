@@ -1,0 +1,106 @@
+"use client";
+
+import { useQuery } from "convex/react";
+import { useUser } from "@clerk/nextjs";
+import { api } from "@/convex/_generated/api";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+
+export default function Settings() {
+  const { user: clerkUser } = useUser();
+  const user = useQuery(api.users.currentUser);
+  const xeroConnection = useQuery(api.xero.getConnection);
+
+  if (user === undefined) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-32 w-full" />
+      </div>
+    );
+  }
+
+  function handleConnectXero() {
+    const clientId = process.env.NEXT_PUBLIC_XERO_CLIENT_ID;
+    const redirectUri = process.env.NEXT_PUBLIC_XERO_REDIRECT_URI;
+    if (!clientId || !redirectUri || !user?._id) return;
+    const url = new URL("https://login.xero.com/identity/connect/authorize");
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("client_id", clientId);
+    url.searchParams.set("redirect_uri", redirectUri);
+    url.searchParams.set("state", user._id);
+    url.searchParams.set(
+      "scope",
+      "openid profile email accounting.invoices accounting.contacts accounting.payments accounting.settings.read offline_access"
+    );
+    window.location.href = url.toString();
+  }
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold">Settings</h1>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Account</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-muted-foreground w-20">Email:</span>
+            <span>{clerkUser?.primaryEmailAddress?.emailAddress ?? user?.email}</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-muted-foreground w-20">Role:</span>
+            <Badge variant="outline">{user?.role}</Badge>
+          </div>
+        </CardContent>
+      </Card>
+
+      {user?.role === "customer" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Xero Connection</CardTitle>
+            <CardDescription>
+              Connect your Xero account to push transactions as invoices.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {xeroConnection === undefined ? (
+              <Skeleton className="h-10 w-48" />
+            ) : xeroConnection ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-muted-foreground">
+                    Status:
+                  </span>
+                  <Badge>Connected</Badge>
+                </div>
+                {xeroConnection.tenantName && (
+                  <div className="flex items-center gap-4">
+                    <span className="text-sm text-muted-foreground">
+                      Organisation:
+                    </span>
+                    <span>{xeroConnection.tenantName}</span>
+                  </div>
+                )}
+                <Button variant="outline" size="sm" onClick={handleConnectXero} className="mt-2">
+                  Reconnect Xero
+                </Button>
+              </div>
+            ) : (
+              <Button onClick={handleConnectXero}>Connect Xero</Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}

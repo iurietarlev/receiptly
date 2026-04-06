@@ -7,8 +7,8 @@ import { ClerkProvider } from "@clerk/nextjs";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "My App Title",
-  description: "My app description",
+  title: "Receiptly",
+  description: "Retrieve transaction receipts and push to Xero",
 };
 
 export default function RootLayout({
