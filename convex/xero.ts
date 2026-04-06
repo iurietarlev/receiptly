@@ -114,19 +114,21 @@ export const pushToXero = action({
           LineItems: lineItems,
           CurrencyCode: txn.currency,
           Reference: txn.transactionCode,
-          Status: "AUTHORISED",
+          Status: "DRAFT",
+        };
+
+        const xeroHeaders = {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          "Xero-Tenant-Id": connection.xeroTenantId,
         };
 
         const response = await fetch(
           "https://api.xero.com/api.xro/2.0/Invoices",
           {
             method: "POST",
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              "Content-Type": "application/json",
-              Accept: "application/json",
-              "Xero-Tenant-Id": connection.xeroTenantId,
-            },
+            headers: xeroHeaders,
             body: JSON.stringify({ Invoices: [invoice] }),
           }
         );
@@ -144,54 +146,60 @@ export const pushToXero = action({
         }
         const xeroInvoiceId = result.Invoices?.[0]?.InvoiceID;
 
-        // Mark the bill as paid — find a BANK account to pay from
+        // Try to approve the draft bill and record payment.
+        // If the user lacks Approver permissions in Xero, the bill
+        // stays as DRAFT — the accountant can approve it manually.
         if (xeroInvoiceId) {
-          const accountsRes = await fetch(
-            "https://api.xero.com/api.xro/2.0/Accounts?where=Type%3D%3D%22BANK%22",
+          let approved = false;
+
+          // Step 1: Approve the bill (DRAFT → AUTHORISED)
+          const approveRes = await fetch(
+            "https://api.xero.com/api.xro/2.0/Invoices/" + xeroInvoiceId,
             {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                Accept: "application/json",
-                "Xero-Tenant-Id": connection.xeroTenantId,
-              },
+              method: "POST",
+              headers: xeroHeaders,
+              body: JSON.stringify({
+                InvoiceID: xeroInvoiceId,
+                Status: "AUTHORISED",
+              }),
             }
           );
+          approved = approveRes.ok;
 
-          if (!accountsRes.ok) {
-            const err = await accountsRes.text();
-            throw new Error(`Failed to fetch Xero bank accounts: ${accountsRes.status} - ${err}`);
-          }
+          // Step 2: Record payment (only if bill was approved)
+          if (approved) {
+            const accountsRes = await fetch(
+              "https://api.xero.com/api.xro/2.0/Accounts?where=Type%3D%3D%22BANK%22",
+              {
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  Accept: "application/json",
+                  "Xero-Tenant-Id": connection.xeroTenantId,
+                },
+              }
+            );
 
-          const accountsData = await accountsRes.json();
-          const bankAccount = accountsData.Accounts?.[0];
-          if (!bankAccount) {
-            throw new Error("No bank account found in Xero. Create a bank account in Xero to enable payments.");
-          }
+            if (accountsRes.ok) {
+              const accountsData = await accountsRes.json();
+              const bankAccount = accountsData.Accounts?.[0];
+              if (bankAccount) {
+                const payment = {
+                  Invoice: { InvoiceID: xeroInvoiceId },
+                  Account: { Code: bankAccount.Code },
+                  Date: dateStr,
+                  Amount: txn.amount,
+                };
 
-          const payment = {
-            Invoice: { InvoiceID: xeroInvoiceId },
-            Account: { Code: bankAccount.Code },
-            Date: dateStr,
-            Amount: txn.amount,
-          };
-
-          const paymentRes = await fetch(
-            "https://api.xero.com/api.xro/2.0/Payments",
-            {
-              method: "PUT",
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                "Content-Type": "application/json",
-                Accept: "application/json",
-                "Xero-Tenant-Id": connection.xeroTenantId,
-              },
-              body: JSON.stringify(payment),
+                await fetch(
+                  "https://api.xero.com/api.xro/2.0/Payments",
+                  {
+                    method: "PUT",
+                    headers: xeroHeaders,
+                    body: JSON.stringify(payment),
+                  }
+                );
+              }
             }
-          );
-
-          if (!paymentRes.ok) {
-            const paymentErr = await paymentRes.text();
-            throw new Error(`Xero payment error: ${paymentRes.status} - ${paymentErr}`);
           }
         }
 
