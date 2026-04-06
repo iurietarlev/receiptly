@@ -21,6 +21,7 @@ export default function Settings() {
   const user = useQuery(api.users.currentUser);
   const xeroConnection = useQuery(api.xero.getConnection);
   const verifyConnection = useAction(api.xero.verifyConnection);
+  const disconnectXero = useAction(api.xero.disconnect);
   const verifiedRef = useRef(false);
   const searchParams = useSearchParams();
   const xeroStatus = searchParams.get("xero");
@@ -127,9 +128,18 @@ export default function Settings() {
                     Your Xero connection has expired. Please reconnect to continue pushing transactions.
                   </p>
                 )}
-                <Button variant="outline" size="sm" onClick={handleConnectXero} className="mt-2">
-                  Reconnect Xero
-                </Button>
+                <div className="flex gap-2 mt-2">
+                  <Button variant="outline" size="sm" onClick={handleConnectXero}>
+                    Reconnect Xero
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => disconnectXero()}
+                  >
+                    Disconnect
+                  </Button>
+                </div>
               </div>
             ) : (
               <Button onClick={handleConnectXero}>Connect Xero</Button>

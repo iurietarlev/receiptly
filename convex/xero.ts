@@ -28,6 +28,13 @@ export const getConnection = query({
   },
 });
 
+export const disconnect = action({
+  args: {},
+  handler: async (ctx) => {
+    await ctx.runMutation(internal.xeroInternal.deleteConnectionForUser, {});
+  },
+});
+
 export const verifyConnection = action({
   args: {},
   handler: async (ctx) => {

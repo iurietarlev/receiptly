@@ -88,6 +88,30 @@ export const deleteConnection = internalMutation({
   },
 });
 
+export const deleteConnectionForUser = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return;
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_tokenIdentifier", (q) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier)
+      )
+      .unique();
+    if (!user) return;
+
+    const connection = await ctx.db
+      .query("xero_connections")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
+    if (connection) {
+      await ctx.db.delete(connection._id);
+    }
+  },
+});
+
 export const markTransactionPushed = internalMutation({
   args: {
     transactionId: v.id("transactions"),
