@@ -79,20 +79,28 @@ export const pushToXero = action({
           .join("\n");
 
         // Build line items from SumUp products if available
-        const lineItems: { Description: string; Quantity: number; UnitAmount: number; AccountCode: string }[] =
+        const lineItems: {
+          Description: string;
+          Quantity: number;
+          UnitAmount: number;
+          AccountCode: string;
+          TaxAmount?: number;
+        }[] =
           txn.products && txn.products.length > 0
             ? txn.products.map((p) => ({
                 Description: p.name,
                 Quantity: p.quantity,
                 UnitAmount: p.price,
                 AccountCode: "400",
+                ...(p.vatAmount != null ? { TaxAmount: p.vatAmount } : {}),
               }))
             : [
                 {
-                  Description: `Payment - ${paymentDetails}`,
+                  Description: `Payment`,
                   Quantity: 1,
                   UnitAmount: txn.amount - (txn.tipAmount ?? 0),
                   AccountCode: "400",
+                  ...(txn.vatAmount != null ? { TaxAmount: txn.vatAmount } : {}),
                 },
               ];
 
@@ -106,12 +114,21 @@ export const pushToXero = action({
           });
         }
 
+        // Add receipt details as a zero-amount descriptive line item
+        lineItems.push({
+          Description: paymentDetails,
+          Quantity: 0,
+          UnitAmount: 0,
+          AccountCode: "400",
+        });
+
         const invoice = {
           Type: "ACCPAY",
           Contact: { Name: txn.merchantName },
           Date: dateStr,
           DueDate: dateStr,
           LineItems: lineItems,
+          LineAmountTypes: "Exclusive",
           CurrencyCode: txn.currency,
           Reference: txn.transactionCode,
           Status: "AUTHORISED",
