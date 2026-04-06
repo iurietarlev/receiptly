@@ -67,9 +67,11 @@ export const pushToXero = action({
         const now = new Date();
         const billDate = txnDate > now ? now : txnDate;
         const dateStr = billDate.toISOString().split("T")[0];
-        // Build payment details for the accountant
+        // Build receipt details for the accountant
         const paymentDetails = [
+          `Merchant: ${txn.merchantName}`,
           `SumUp Transaction Code: ${txn.transactionCode}`,
+          txn.paymentType ? `Payment type: ${txn.paymentType}` : null,
           txn.cardLast4 ? `Card: **** ${txn.cardLast4} (${txn.cardType ?? "Unknown"})` : null,
           txn.entryMode ? `Entry mode: ${txn.entryMode}` : null,
           txn.verificationMethod ? `Verification: ${txn.verificationMethod}` : null,
