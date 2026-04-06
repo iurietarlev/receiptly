@@ -80,7 +80,7 @@ export const upsertTransactions = internalMutation({
         if (txn.products && !existing.products) {
           patch.products = txn.products;
         }
-        if (txn.sumupRawDetail && !existing.sumupRawDetail) {
+        if (txn.sumupRawDetail) {
           patch.sumupRawDetail = txn.sumupRawDetail;
         }
         if (Object.keys(patch).length > 0) {
