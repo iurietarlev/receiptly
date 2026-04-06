@@ -47,7 +47,7 @@ function AddCardForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4 sm:flex-row sm:items-end">
+        <form onSubmit={(e) => { void handleSubmit(e); }} className="flex flex-col gap-4 sm:flex-row sm:items-end">
           <div className="space-y-2">
             <Label htmlFor="card-last4">Last 4 digits</Label>
             <Input
@@ -110,9 +110,9 @@ function CardItem({ card }: { card: { _id: Id<"user_cards">; cardLast4: string; 
               onChange={(e) => setLabel(e.target.value)}
               placeholder="Card label"
               className="h-8"
-              onKeyDown={(e) => e.key === "Enter" && handleSave()}
+              onKeyDown={(e) => { if (e.key === "Enter") void handleSave(); }}
             />
-            <Button size="sm" onClick={handleSave}>
+            <Button size="sm" onClick={() => { void handleSave(); }}>
               Save
             </Button>
             <Button
@@ -144,7 +144,7 @@ function CardItem({ card }: { card: { _id: Id<"user_cards">; cardLast4: string; 
           <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
             Edit
           </Button>
-          <Button size="sm" variant="ghost" className="text-red-600 hover:text-red-700" onClick={handleDelete}>
+          <Button size="sm" variant="ghost" className="text-red-600 hover:text-red-700" onClick={() => { void handleDelete(); }}>
             Delete
           </Button>
         </div>

@@ -27,7 +27,7 @@ import Link from "next/link";
 
 export default function CustomerDashboard() {
   const [selectedTxns, setSelectedTxns] = useState<Set<string>>(new Set());
-  const [filterCard, setFilterCard] = useState<string | "all">("all");
+  const [filterCard, setFilterCard] = useState<string>("all");
   const [pushing, setPushing] = useState(false);
   const [pushResults, setPushResults] = useState<
     { transactionId: string; success: boolean; error?: string }[] | null
@@ -82,17 +82,13 @@ export default function CustomerDashboard() {
           <Button
             size="sm"
             disabled={syncing}
-            onClick={async () => {
+            onClick={() => {
               setSyncing(true);
               setSyncStatus(null);
-              try {
-                await syncAllNow();
-                setSyncStatus("success");
-              } catch {
-                setSyncStatus("error");
-              } finally {
-                setSyncing(false);
-              }
+              syncAllNow()
+                .then(() => setSyncStatus("success"))
+                .catch(() => setSyncStatus("error"))
+                .finally(() => setSyncing(false));
             }}
           >
             {syncing ? "Syncing…" : "Sync Now"}
