@@ -87,8 +87,12 @@ export const pushToXero = action({
           TaxAmount?: number;
         }[] =
           txn.products && txn.products.length > 0
-            ? txn.products.map((p) => ({
-                Description: p.name,
+            ? txn.products.map((p, i) => ({
+                // Append receipt details to the first product's description
+                Description:
+                  i === 0
+                    ? `${p.name}\n${paymentDetails}`
+                    : p.name,
                 Quantity: p.quantity,
                 UnitAmount: p.price,
                 AccountCode: "400",
@@ -96,7 +100,7 @@ export const pushToXero = action({
               }))
             : [
                 {
-                  Description: `Payment`,
+                  Description: `Payment - ${paymentDetails}`,
                   Quantity: 1,
                   UnitAmount: txn.amount - (txn.tipAmount ?? 0),
                   AccountCode: "400",
@@ -113,14 +117,6 @@ export const pushToXero = action({
             AccountCode: "400",
           });
         }
-
-        // Add receipt details as a zero-amount descriptive line item
-        lineItems.push({
-          Description: paymentDetails,
-          Quantity: 0,
-          UnitAmount: 0,
-          AccountCode: "400",
-        });
 
         const invoice = {
           Type: "ACCPAY",
