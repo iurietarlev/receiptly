@@ -69,6 +69,9 @@ export const pushToXero = action({
         const dateStr = billDate.toISOString().split("T")[0];
 
         // Build receipt details from stored SumUp raw detail
+        console.log(
+          `[pushToXero] txn ${txn.transactionCode}: sumupRawDetail present=${txn.sumupRawDetail != null}, type=${typeof txn.sumupRawDetail}, keys=${txn.sumupRawDetail ? Object.keys(txn.sumupRawDetail as Record<string, unknown>).join(",") : "n/a"}`
+        );
         const paymentDetails = txn.sumupRawDetail
           ? `Receipt details:\n${JSON.stringify(txn.sumupRawDetail, null, 2)}`
           : [
