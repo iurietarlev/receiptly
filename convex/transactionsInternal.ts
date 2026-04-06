@@ -37,6 +37,7 @@ export const upsertTransactions = internalMutation({
             })
           )
         ),
+        sumupRawDetail: v.optional(v.any()),
       })
     ),
   },
@@ -78,6 +79,9 @@ export const upsertTransactions = internalMutation({
         }
         if (txn.products && !existing.products) {
           patch.products = txn.products;
+        }
+        if (txn.sumupRawDetail) {
+          patch.sumupRawDetail = txn.sumupRawDetail;
         }
         if (Object.keys(patch).length > 0) {
           await ctx.db.patch(existing._id, patch);
@@ -178,12 +182,13 @@ export const syncMerchantTransactions = internalAction({
                     verification_method: detail.verification_method as string | undefined,
                     auth_code: detail.auth_code as string | undefined,
                     products: detail.products as SumUpProduct[] | undefined,
+                    rawDetail: detail,
                   };
                 }
               } catch {
                 // Fall through to use history-level data only
               }
-              return { ...item, card: undefined, vat_amount: undefined, tip_amount: undefined, verification_method: undefined, auth_code: undefined, products: undefined };
+              return { ...item, card: undefined, vat_amount: undefined, tip_amount: undefined, verification_method: undefined, auth_code: undefined, products: undefined, rawDetail: undefined };
             })
           );
 
@@ -209,6 +214,7 @@ export const syncMerchantTransactions = internalAction({
               vatRate: p.vat_rate ?? undefined,
               vatAmount: p.vat_amount ?? undefined,
             })) ?? undefined,
+            sumupRawDetail: item.rawDetail ?? undefined,
           }));
 
           const inserted = await ctx.runMutation(

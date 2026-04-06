@@ -67,25 +67,41 @@ export const pushToXero = action({
         const now = new Date();
         const billDate = txnDate > now ? now : txnDate;
         const dateStr = billDate.toISOString().split("T")[0];
-        // Build payment details for the accountant
-        const paymentDetails = [
-          `SumUp Transaction Code: ${txn.transactionCode}`,
-          txn.cardLast4 ? `Card: **** ${txn.cardLast4} (${txn.cardType ?? "Unknown"})` : null,
-          txn.entryMode ? `Entry mode: ${txn.entryMode}` : null,
-          txn.verificationMethod ? `Verification: ${txn.verificationMethod}` : null,
-          txn.authCode ? `Auth code: ${txn.authCode}` : null,
-        ]
-          .filter(Boolean)
-          .join("\n");
+
+        // Build receipt details from stored SumUp raw detail
+        const paymentDetails = txn.sumupRawDetail
+          ? formatRawDetail(txn.sumupRawDetail as Record<string, unknown>)
+          : [
+              `Merchant: ${txn.merchantName}`,
+              `SumUp Transaction Code: ${txn.transactionCode}`,
+              txn.paymentType ? `Payment type: ${txn.paymentType}` : null,
+              txn.cardLast4 ? `Card: **** ${txn.cardLast4} (${txn.cardType ?? "Unknown"})` : null,
+              txn.entryMode ? `Entry mode: ${txn.entryMode}` : null,
+              txn.verificationMethod ? `Verification: ${txn.verificationMethod}` : null,
+              txn.authCode ? `Auth code: ${txn.authCode}` : null,
+            ]
+              .filter(Boolean)
+              .join("\n");
 
         // Build line items from SumUp products if available
-        const lineItems: { Description: string; Quantity: number; UnitAmount: number; AccountCode: string }[] =
+        const lineItems: {
+          Description: string;
+          Quantity: number;
+          UnitAmount: number;
+          AccountCode: string;
+          TaxAmount?: number;
+        }[] =
           txn.products && txn.products.length > 0
-            ? txn.products.map((p) => ({
-                Description: p.name,
+            ? txn.products.map((p, i) => ({
+                // Append receipt details to the first product's description
+                Description:
+                  i === 0
+                    ? `${p.name}\n${paymentDetails}`
+                    : p.name,
                 Quantity: p.quantity,
                 UnitAmount: p.price,
                 AccountCode: "400",
+                ...(p.vatAmount != null ? { TaxAmount: p.vatAmount } : {}),
               }))
             : [
                 {
@@ -93,6 +109,7 @@ export const pushToXero = action({
                   Quantity: 1,
                   UnitAmount: txn.amount - (txn.tipAmount ?? 0),
                   AccountCode: "400",
+                  ...(txn.vatAmount != null ? { TaxAmount: txn.vatAmount } : {}),
                 },
               ];
 
@@ -112,6 +129,7 @@ export const pushToXero = action({
           Date: dateStr,
           DueDate: dateStr,
           LineItems: lineItems,
+          LineAmountTypes: "Exclusive",
           CurrencyCode: txn.currency,
           Reference: txn.transactionCode,
           Status: "DRAFT",
@@ -222,6 +240,49 @@ export const pushToXero = action({
     return results;
   },
 });
+
+function formatRawDetail(raw: Record<string, unknown>): string {
+  const card = raw.card as Record<string, unknown> | undefined;
+  const location = raw.location as Record<string, unknown> | undefined;
+  const products = raw.products as Array<Record<string, unknown>> | undefined;
+
+  const lines: (string | null)[] = [
+    raw.merchant_code ? `Merchant code: ${raw.merchant_code}` : null,
+    raw.username ? `Merchant: ${raw.username}` : null,
+    location?.city ? `Location: ${location.city}${location.country ? `, ${location.country}` : ""}` : null,
+    `Transaction code: ${raw.transaction_code}`,
+    raw.internal_id ? `Internal ID: ${raw.internal_id}` : null,
+    raw.client_transaction_id ? `Client transaction ID: ${raw.client_transaction_id}` : null,
+    `Amount: ${raw.amount} ${raw.currency}`,
+    raw.vat_amount != null ? `VAT amount: ${raw.vat_amount}` : null,
+    raw.tip_amount != null ? `Tip amount: ${raw.tip_amount}` : null,
+    raw.status ? `Status: ${raw.status}` : null,
+    raw.payment_type ? `Payment type: ${raw.payment_type}` : null,
+    raw.simple_payment_type ? `Simple payment type: ${raw.simple_payment_type}` : null,
+    raw.entry_mode ? `Entry mode: ${raw.entry_mode}` : null,
+    raw.verification_method ? `Verification: ${raw.verification_method}` : null,
+    raw.auth_code ? `Auth code: ${raw.auth_code}` : null,
+    card ? `Card: **** ${card.last_4_digits ?? "N/A"} (${card.type ?? "Unknown"})` : null,
+    card?.scheme ? `Card scheme: ${card.scheme}` : null,
+    raw.installments_count ? `Installments: ${raw.installments_count}` : null,
+    raw.payout_type ? `Payout type: ${raw.payout_type}` : null,
+    raw.payout_plan ? `Payout plan: ${raw.payout_plan}` : null,
+    raw.payouts_total != null ? `Payouts total: ${raw.payouts_total}` : null,
+    raw.payouts_received != null ? `Payouts received: ${raw.payouts_received}` : null,
+    raw.tax_enabled != null ? `Tax enabled: ${raw.tax_enabled}` : null,
+    raw.timestamp ? `Timestamp: ${raw.timestamp}` : null,
+    raw.local_time ? `Local time: ${raw.local_time}` : null,
+  ];
+
+  if (products && products.length > 0) {
+    lines.push(`Products:`);
+    for (const p of products) {
+      lines.push(`  - ${p.name}: qty ${p.quantity}, price ${p.price}${p.vat_rate != null ? `, VAT ${p.vat_rate}%` : ""}`);
+    }
+  }
+
+  return lines.filter(Boolean).join("\n");
+}
 
 async function refreshXeroToken(refreshToken: string) {
   const credentials = btoa(
