@@ -52,11 +52,21 @@ export const pushToXero = action({
       tokenExpiresAt: Date.now() + refreshed.expires_in * 1000,
     });
 
-    // Get transaction details
+    // Get transaction details and the merchant's SumUp token for live receipt fetch
     const transactions = await ctx.runQuery(
       internal.xeroInternal.getTransactionsByIds,
       { transactionIds: args.transactionIds }
     );
+
+    // Get the merchant's SumUp access token so we can fetch full receipt details
+    let sumupAccessToken: string | null = null;
+    if (transactions.length > 0) {
+      const merchant = await ctx.runQuery(
+        internal.merchantsInternal.getById,
+        { merchantId: transactions[0].merchantId }
+      );
+      sumupAccessToken = merchant?.sumupAccessToken ?? null;
+    }
 
     const results: { transactionId: string; success: boolean; error?: string }[] = [];
 
@@ -67,10 +77,27 @@ export const pushToXero = action({
         const now = new Date();
         const billDate = txnDate > now ? now : txnDate;
         const dateStr = billDate.toISOString().split("T")[0];
+
+        // Fetch full receipt details live from SumUp
+        let receiptDetail: Record<string, unknown> | null = null;
+        if (sumupAccessToken) {
+          try {
+            const detailRes = await fetch(
+              `https://api.sumup.com/v0.1/me/transactions?transaction_code=${txn.transactionCode}`,
+              { headers: { Authorization: `Bearer ${sumupAccessToken}` } }
+            );
+            const contentType = detailRes.headers.get("content-type") ?? "";
+            if (detailRes.ok && contentType.includes("application/json")) {
+              receiptDetail = await detailRes.json();
+            }
+          } catch {
+            // Fall through to structured fields
+          }
+        }
+
         // Build receipt details for the accountant
-        // Use the full raw SumUp detail if available, otherwise fall back to structured fields
-        const paymentDetails = txn.sumupRawDetail
-          ? `Receipt details:\n${JSON.stringify(txn.sumupRawDetail, null, 2)}`
+        const paymentDetails = receiptDetail
+          ? `Receipt details:\n${JSON.stringify(receiptDetail, null, 2)}`
           : [
               `Merchant: ${txn.merchantName}`,
               `SumUp Transaction Code: ${txn.transactionCode}`,
