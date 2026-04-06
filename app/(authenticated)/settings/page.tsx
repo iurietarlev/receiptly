@@ -57,7 +57,7 @@ export default function Settings() {
     url.searchParams.set("state", user._id);
     url.searchParams.set(
       "scope",
-      "openid profile email accounting.transactions offline_access"
+      "openid profile email accounting.invoices accounting.payments accounting.contacts accounting.settings.read offline_access"
     );
     window.location.href = url.toString();
   }
