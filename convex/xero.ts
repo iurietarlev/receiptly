@@ -69,11 +69,8 @@ export const pushToXero = action({
         const dateStr = billDate.toISOString().split("T")[0];
 
         // Build receipt details from stored SumUp raw detail
-        console.log(
-          `[pushToXero] txn ${txn.transactionCode}: sumupRawDetail present=${txn.sumupRawDetail != null}, type=${typeof txn.sumupRawDetail}, keys=${txn.sumupRawDetail ? Object.keys(txn.sumupRawDetail as Record<string, unknown>).join(",") : "n/a"}`
-        );
         const paymentDetails = txn.sumupRawDetail
-          ? `Receipt details:\n${JSON.stringify(txn.sumupRawDetail, null, 2)}`
+          ? formatRawDetail(txn.sumupRawDetail as Record<string, unknown>)
           : [
               `Merchant: ${txn.merchantName}`,
               `SumUp Transaction Code: ${txn.transactionCode}`,
@@ -235,6 +232,49 @@ export const pushToXero = action({
     return results;
   },
 });
+
+function formatRawDetail(raw: Record<string, unknown>): string {
+  const card = raw.card as Record<string, unknown> | undefined;
+  const location = raw.location as Record<string, unknown> | undefined;
+  const products = raw.products as Array<Record<string, unknown>> | undefined;
+
+  const lines: (string | null)[] = [
+    raw.merchant_code ? `Merchant code: ${raw.merchant_code}` : null,
+    raw.username ? `Merchant: ${raw.username}` : null,
+    location?.city ? `Location: ${location.city}${location.country ? `, ${location.country}` : ""}` : null,
+    `Transaction code: ${raw.transaction_code}`,
+    raw.internal_id ? `Internal ID: ${raw.internal_id}` : null,
+    raw.client_transaction_id ? `Client transaction ID: ${raw.client_transaction_id}` : null,
+    `Amount: ${raw.amount} ${raw.currency}`,
+    raw.vat_amount != null ? `VAT amount: ${raw.vat_amount}` : null,
+    raw.tip_amount != null ? `Tip amount: ${raw.tip_amount}` : null,
+    raw.status ? `Status: ${raw.status}` : null,
+    raw.payment_type ? `Payment type: ${raw.payment_type}` : null,
+    raw.simple_payment_type ? `Simple payment type: ${raw.simple_payment_type}` : null,
+    raw.entry_mode ? `Entry mode: ${raw.entry_mode}` : null,
+    raw.verification_method ? `Verification: ${raw.verification_method}` : null,
+    raw.auth_code ? `Auth code: ${raw.auth_code}` : null,
+    card ? `Card: **** ${card.last_4_digits ?? "N/A"} (${card.type ?? "Unknown"})` : null,
+    card?.scheme ? `Card scheme: ${card.scheme}` : null,
+    raw.installments_count ? `Installments: ${raw.installments_count}` : null,
+    raw.payout_type ? `Payout type: ${raw.payout_type}` : null,
+    raw.payout_plan ? `Payout plan: ${raw.payout_plan}` : null,
+    raw.payouts_total != null ? `Payouts total: ${raw.payouts_total}` : null,
+    raw.payouts_received != null ? `Payouts received: ${raw.payouts_received}` : null,
+    raw.tax_enabled != null ? `Tax enabled: ${raw.tax_enabled}` : null,
+    raw.timestamp ? `Timestamp: ${raw.timestamp}` : null,
+    raw.local_time ? `Local time: ${raw.local_time}` : null,
+  ];
+
+  if (products && products.length > 0) {
+    lines.push(`Products:`);
+    for (const p of products) {
+      lines.push(`  - ${p.name}: qty ${p.quantity}, price ${p.price}${p.vat_rate != null ? `, VAT ${p.vat_rate}%` : ""}`);
+    }
+  }
+
+  return lines.filter(Boolean).join("\n");
+}
 
 async function refreshXeroToken(refreshToken: string) {
   const credentials = btoa(
