@@ -182,7 +182,7 @@ export default function CustomerDashboard() {
               </div>
               {selectedTxns.size > 0 && (
                 <div className="flex gap-2">
-                  {xeroConnection ? (
+                  {xeroConnection && !xeroConnection.tokenExpired ? (
                     <Button
                       disabled={pushing}
                       onClick={() => {
@@ -194,6 +194,22 @@ export default function CustomerDashboard() {
                           .then((results) => {
                             setPushResults(results);
                             setSelectedTxns(new Set());
+                          })
+                          .catch((err) => {
+                            const msg = err instanceof Error ? err.message : "Unknown error";
+                            if (msg.includes("token") || msg.includes("refresh") || msg.includes("not connected")) {
+                              setPushResults([{
+                                transactionId: "",
+                                success: false,
+                                error: "Xero connection expired. Please reconnect Xero in Settings.",
+                              }]);
+                            } else {
+                              setPushResults([{
+                                transactionId: "",
+                                success: false,
+                                error: msg,
+                              }]);
+                            }
                           })
                           .finally(() => setPushing(false));
                       }}
@@ -207,7 +223,7 @@ export default function CustomerDashboard() {
                         window.location.href = "/settings";
                       }}
                     >
-                      Connect Xero first
+                      {xeroConnection?.tokenExpired ? "Reconnect Xero" : "Connect Xero first"}
                     </Button>
                   )}
                 </div>

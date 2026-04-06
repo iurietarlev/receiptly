@@ -23,6 +23,7 @@ export const getConnection = query({
       xeroTenantId: connection.xeroTenantId,
       tenantName: connection.tenantName,
       connected: true,
+      tokenExpired: connection.tokenExpiresAt < Date.now(),
     };
   },
 });
