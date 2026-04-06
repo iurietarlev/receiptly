@@ -2,6 +2,7 @@
 
 import { useQuery } from "convex/react";
 import { useUser } from "@clerk/nextjs";
+import { useSearchParams } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import {
   Card,
@@ -18,6 +19,9 @@ export default function Settings() {
   const { user: clerkUser } = useUser();
   const user = useQuery(api.users.currentUser);
   const xeroConnection = useQuery(api.xero.getConnection);
+  const searchParams = useSearchParams();
+  const xeroStatus = searchParams.get("xero");
+  const xeroDetail = searchParams.get("detail");
 
   if (user === undefined) {
     return (
@@ -72,7 +76,17 @@ export default function Settings() {
               Connect your Xero account to push transactions as invoices.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
+            {xeroStatus === "success" && (
+              <p className="text-sm text-green-600 font-medium">
+                Xero connected successfully.
+              </p>
+            )}
+            {xeroStatus === "error" && (
+              <p className="text-sm text-red-600 font-medium">
+                Failed to connect Xero.{xeroDetail ? ` ${xeroDetail}` : ""} Please try again.
+              </p>
+            )}
             {xeroConnection === undefined ? (
               <Skeleton className="h-10 w-48" />
             ) : xeroConnection ? (
@@ -81,7 +95,11 @@ export default function Settings() {
                   <span className="text-sm text-muted-foreground">
                     Status:
                   </span>
-                  <Badge>Connected</Badge>
+                  {xeroConnection.tokenExpired ? (
+                    <Badge variant="destructive">Expired</Badge>
+                  ) : (
+                    <Badge>Connected</Badge>
+                  )}
                 </div>
                 {xeroConnection.tenantName && (
                   <div className="flex items-center gap-4">
@@ -90,6 +108,11 @@ export default function Settings() {
                     </span>
                     <span>{xeroConnection.tenantName}</span>
                   </div>
+                )}
+                {xeroConnection.tokenExpired && (
+                  <p className="text-sm text-muted-foreground">
+                    Your Xero connection has expired. Please reconnect to continue pushing transactions.
+                  </p>
                 )}
                 <Button variant="outline" size="sm" onClick={handleConnectXero} className="mt-2">
                   Reconnect Xero
