@@ -78,9 +78,10 @@ export const pushToXero = action({
         const billDate = txnDate > now ? now : txnDate;
         const dateStr = billDate.toISOString().split("T")[0];
 
-        // Fetch full receipt details live from SumUp
-        let receiptDetail: Record<string, unknown> | null = null;
-        if (sumupAccessToken) {
+        // Use stored raw detail from Convex, or fetch live from SumUp as fallback
+        let receiptDetail: Record<string, unknown> | null =
+          (txn.sumupRawDetail as Record<string, unknown> | undefined) ?? null;
+        if (!receiptDetail && sumupAccessToken) {
           try {
             const detailRes = await fetch(
               `https://api.sumup.com/v0.1/me/transactions?transaction_code=${txn.transactionCode}`,
