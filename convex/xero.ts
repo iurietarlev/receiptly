@@ -31,6 +31,23 @@ export const getConnection = query({
 export const disconnect = action({
   args: {},
   handler: async (ctx) => {
+    const connection = await ctx.runQuery(
+      internal.xeroInternal.getConnectionWithTokens,
+      {}
+    );
+
+    // Revoke the refresh token at Xero so the app is removed from the
+    // user's connected apps. Best-effort: even if revocation fails
+    // (network error, token already revoked), still drop the local
+    // record so the UI reflects the user's intent.
+    if (connection) {
+      try {
+        await revokeXeroToken(connection.refreshToken);
+      } catch {
+        // Swallow — local cleanup proceeds regardless.
+      }
+    }
+
     await ctx.runMutation(internal.xeroInternal.deleteConnectionForUser, {});
   },
 });
@@ -365,6 +382,31 @@ function formatRawDetail(raw: Record<string, unknown>): string {
   flattenObject(raw, "");
 
   return lines.join("\n");
+}
+
+async function revokeXeroToken(refreshToken: string) {
+  const credentials = btoa(
+    `${process.env.XERO_CLIENT_ID}:${process.env.XERO_CLIENT_SECRET}`
+  );
+
+  const response = await fetch(
+    "https://identity.xero.com/connect/revocation",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Basic ${credentials}`,
+      },
+      body: new URLSearchParams({ token: refreshToken }),
+    }
+  );
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(
+      `Xero token revocation failed: ${response.status} - ${body.slice(0, 200)}`
+    );
+  }
 }
 
 async function refreshXeroToken(refreshToken: string) {

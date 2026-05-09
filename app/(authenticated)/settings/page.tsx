@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useQuery, useAction } from "convex/react";
 import { useUser } from "@clerk/nextjs";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import {
   Card,
@@ -24,8 +24,17 @@ export default function Settings() {
   const disconnectXero = useAction(api.xero.disconnect);
   const verifiedRef = useRef(false);
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const xeroStatus = searchParams.get("xero");
   const xeroDetail = searchParams.get("detail");
+
+  async function handleDisconnect() {
+    await disconnectXero();
+    if (xeroStatus || xeroDetail) {
+      router.replace(pathname);
+    }
+  }
 
   useEffect(() => {
     if (xeroConnection && !verifiedRef.current) {
@@ -135,7 +144,7 @@ export default function Settings() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => void disconnectXero()}
+                    onClick={() => void handleDisconnect()}
                   >
                     Disconnect
                   </Button>
